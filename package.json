@@ -1,0 +1,36 @@
+{
+  "name": "kalshi-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for Kalshi prediction market trading — pull live events, analyze markets, and execute trades via any MCP-compatible AI agent",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "kalshi-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "inspect": "npx -y @modelcontextprotocol/inspector node dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "kalshi",
+    "prediction-market",
+    "trading",
+    "ai-agent",
+    "openclaw",
+    "claude"
+  ],
+  "author": "Kanakamedala Sumanth",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "dotenv": "^16.4.7",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "typescript": "^5.7.3"
+  }
+}
