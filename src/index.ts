@@ -44,6 +44,7 @@ async function main(): Promise<void> {
         baseUrl: kalshiConfig.baseUrl,
         logLevel: kalshiConfig.logLevel,
         apiKeyId: kalshiConfig.apiKeyId.substring(0, 8) + "...",
+        publicBaseUrl: kalshiConfig.publicBaseUrl,
     });
 
     // ── Create the server with all tools ─────────────────────────

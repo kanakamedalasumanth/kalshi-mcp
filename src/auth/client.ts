@@ -40,6 +40,7 @@ export interface KalshiApiError {
  */
 export class KalshiClient {
     private baseUrl: string;
+    private publicBaseUrl: string;
     private signer: KalshiSigner;
 
     /**
@@ -47,9 +48,10 @@ export class KalshiClient {
      *                (e.g. "https://api.elections.kalshi.com/trade-api/v2")
      * @param signer  A KalshiSigner instance configured with your API key
      */
-    constructor(baseUrl: string, signer: KalshiSigner) {
+    constructor(baseUrl: string, publicBaseUrl: string, signer: KalshiSigner) {
         this.baseUrl = baseUrl.replace(/\/$/, ""); // Strip trailing slash
         this.signer = signer;
+        this.publicBaseUrl = publicBaseUrl.replace(/\/$/, ""); // Strip trailing slash
         log.info("HTTP client initialized", { baseUrl: this.baseUrl });
     }
 
@@ -63,6 +65,16 @@ export class KalshiClient {
     async get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
         const url = this.buildUrl(path, params);
         return this.request<T>("GET", url, path);
+    }
+
+    /**
+    * Sends a GET request.
+    * @param path   API path after the base URL (e.g. "/events")
+    * @param params Optional query parameters as key-value pairs
+    */
+    async getPublic<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
+        const url = this.buildUrl(path, params, true);
+        return this.request<T>("GET", url, path, undefined, true);
     }
 
     /**
@@ -115,13 +127,14 @@ export class KalshiClient {
         method: string,
         url: string,
         path: string,
-        body?: unknown  // unknown here is fine — this is the internal dispatcher,
-        //   the public methods (post/put) enforce types via generics
+        body?: unknown,  // unknown here is fine — this is the internal dispatcher,
+        //   the public methods (post/put) enforce types via generics,
+        isPublicUrl: boolean = false
     ): Promise<T> {
         // The signer needs the path as it appears in the URL (including /trade-api/v2)
         // Kalshi expects the full path from the root for signing
         const signingPath = new URL(url).pathname;
-        const authHeaders = this.signer.sign(method, signingPath);
+        const authHeaders = isPublicUrl ? {} : this.signer.sign(method, signingPath);
 
         // Start timing for the log
         const done = log.time(`${method} ${path}`);
@@ -200,9 +213,10 @@ export class KalshiClient {
      */
     private buildUrl(
         path: string,
-        params?: Record<string, string | number | boolean | undefined>
+        params?: Record<string, string | number | boolean | undefined>,
+        isPublic: boolean = false
     ): string {
-        const url = new URL(`${this.baseUrl}${path}`);
+        const url = new URL(`${isPublic ? this.publicBaseUrl : this.baseUrl}${path}`);
 
         if (params) {
             for (const [key, value] of Object.entries(params)) {

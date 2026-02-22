@@ -7,10 +7,11 @@
             ],
             "cwd": "/home/suser/Documents/Kalshi-MCP",
             "env": {
-                "KALSHI_API_KEY_ID": "ee6cfdff-4f99-4efa-ae9a-130fc7e24870",
-                "KALSHI_PRIVATE_KEY_PATH": "/home/suser/Documents/Key/MyAssistant-App.pem",
+                "KALSHI_API_KEY_ID": "yourapikey",
+                "KALSHI_PRIVATE_KEY_PATH": "path/to/your/private/key.pem",
                 "KALSHI_API_BASE_URL": "https://api.elections.kalshi.com/trade-api/v2",
-                "LOG_LEVEL": "info"
+                "LOG_LEVEL": "debug",
+                "KALSHI_PUBLIC_API_BASE_URL": "https://api.elections.kalshi.com/v1/"
             }
         }
     }

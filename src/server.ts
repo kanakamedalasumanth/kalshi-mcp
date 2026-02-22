@@ -33,7 +33,6 @@ import { registerTradingTools } from "./tools/trading-tools.js";
 import { registerPortfolioTools } from "./tools/portfolio-tools.js";
 import { registerDiscoveryTools } from "./tools/discovery-tools.js";
 import { registerSeriesTools } from "./tools/series-tools.js";
-import { registerCompositeTools } from "./tools/composite-tools.js";
 import { createLogger } from "./logger.js";
 import type { KalshiConfig } from "./config.js";
 
@@ -56,6 +55,7 @@ export function createMcpServer(config: KalshiConfig): McpServer {
     log.info("Creating Kalshi MCP server", {
         baseUrl: config.baseUrl,
         logLevel: config.logLevel,
+        publicBaseUrl: config.publicBaseUrl,
     });
 
     // ── Step 1: Set up authentication ────────────────────────────
@@ -66,7 +66,7 @@ export function createMcpServer(config: KalshiConfig): McpServer {
     // ── Step 2: Create the HTTP client ───────────────────────────
     // The client wraps fetch() and automatically signs every request
     // using the signer - no manual header management needed
-    const client = new KalshiClient(config.baseUrl, signer);
+    const client = new KalshiClient(config.baseUrl, config.publicBaseUrl, signer);
 
     // ── Step 3: Initialise API modules ───────────────────────────
     // Each module focuses on one domain of the Kalshi API
@@ -105,9 +105,6 @@ export function createMcpServer(config: KalshiConfig): McpServer {
 
     // 1 discovery tool (search tags)
     registerDiscoveryTools(server, searchApi);
-
-    // 1 composite tool (multi-step workflow in one call)
-    registerCompositeTools(server, seriesApi, eventsApi);
 
     log.info("Kalshi MCP server fully configured — tools registered!");
 

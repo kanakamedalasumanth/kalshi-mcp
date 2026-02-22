@@ -74,12 +74,10 @@ export class SearchApi {
         log.info("Fetching search series", { filters: params });
         const done = log.time(`GET /search/series`);
 
-        const result = await this.client.get<GetSearchSeriesResponse>("/search/series", {
-            category: params?.category,
-            tags: params?.tags,
-            status: params?.status,
-            orderBy: params?.orderBy,
-        });
+        const result = await this.client.getPublic<GetSearchSeriesResponse>(
+            "/search/series",
+            params
+        );
 
         done({
             resultCount: result.total_results_count,

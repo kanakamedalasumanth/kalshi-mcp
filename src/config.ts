@@ -29,6 +29,7 @@ export interface KalshiConfig {
     privateKeyPath: string;
     baseUrl: string;
     logLevel: "debug" | "info" | "warn" | "error";
+    publicBaseUrl: string;
 }
 
 /**
@@ -61,7 +62,10 @@ function loadConfig(): KalshiConfig {
 
     const logLevel = (process.env.LOG_LEVEL || "info") as KalshiConfig["logLevel"];
 
-    return { apiKeyId, privateKeyPath, baseUrl, logLevel };
+    const publicBaseUrl = process.env.KALSHI_PUBLIC_API_BASE_URL ||
+        "https://api.elections.kalshi.com/v1/";
+
+    return { apiKeyId, privateKeyPath, baseUrl, logLevel, publicBaseUrl };
 }
 
 /** Singleton config instance — created once at import time. */
