@@ -32,6 +32,7 @@ import { registerMarketTools } from "./tools/market-tools.js";
 import { registerTradingTools } from "./tools/trading-tools.js";
 import { registerPortfolioTools } from "./tools/portfolio-tools.js";
 import { registerDiscoveryTools } from "./tools/discovery-tools.js";
+import { registerSeriesTools } from "./tools/series-tools.js";
 import { registerCompositeTools } from "./tools/composite-tools.js";
 import { createLogger } from "./logger.js";
 import type { KalshiConfig } from "./config.js";
@@ -99,8 +100,11 @@ export function createMcpServer(config: KalshiConfig): McpServer {
     // 3 portfolio tools (read-only account queries)
     registerPortfolioTools(server, portfolioApi);
 
-    // 3 discovery tools (series browsing & search)
-    registerDiscoveryTools(server, seriesApi, searchApi);
+    // 2 series tools (series browsing)
+    registerSeriesTools(server, seriesApi);
+
+    // 1 discovery tool (search tags)
+    registerDiscoveryTools(server, searchApi);
 
     // 1 composite tool (multi-step workflow in one call)
     registerCompositeTools(server, seriesApi, eventsApi);

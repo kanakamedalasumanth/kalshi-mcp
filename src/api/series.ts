@@ -52,10 +52,6 @@ export class SeriesApi {
 
     /**
      * Lists all series, optionally filtered by category or tags.
-     *
-     * Use this to discover what recurring event groups exist on Kalshi.
-     * The returned series tickers can be used to filter events or fetch
-     * candlestick data.
      */
     async listSeries(params?: GetSeriesListParams): Promise<GetSeriesListResponse> {
         log.info("Fetching series list", { filters: params });
