@@ -365,7 +365,7 @@ export function registerMarketTools(
                 // Fetch market data and recent trades in parallel for speed
                 const [marketResult, tradesResult] = await Promise.all([
                     marketsApi.getMarket(ticker),
-                    marketsApi.getTrades({ ticker, limit: 50 }),
+                    marketsApi.getTrades({ ticker, limit: 200 }),
                 ]);
 
                 const m = marketResult.market;

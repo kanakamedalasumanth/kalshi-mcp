@@ -35,10 +35,11 @@ export function registerDiscoveryTools(
     // ─────────────────────────────────────────────────────────────
     server.tool(
         "get_search_tags",
-        "Get available categories and tags on Kalshi. " +
-        "Returns a map of categories (e.g. Sports, Crypto, Economics) to their tags. " +
-        "Use these to understand what categories and tags exist before filtering " +
-        "with list_series or search_live_markets.",
+        `
+            Use this tool ONLY when the user explicitly asks what categories or tags are available on Kalshi,
+            or when the agent needs to validate category/tag values before applying filters.
+            Do NOT call this for normal "show me live markets" requests.
+        `,
         {},
         async () => {
             log.info("Tool called: get_search_tags");
@@ -76,20 +77,30 @@ export function registerDiscoveryTools(
     // ─────────────────────────────────────────────────────────────
     server.tool(
         "search_series",
-        "Search for series and related active markets by category and tags on Kalshi. " +
-        "This is the primary way to check current live games, politics, or any other live events, " +
-        "and get market data needed for placing orders.",
+        `
+        Search Kalshi series and related active markets. 
+        Category and tags are OPTIONAL — do NOT require the user to know them. 
+        Default behavior (when no filters are provided): return globally trending OPEN series/markets 
+        so the agent can show what's live right now. 
+        Use category/tags only when the user asks for a specific domain (e.g., sports, crypto, politics) 
+        or wants narrower results. 
+        If the user asks what categories/tags exist, call get_search_tags. 
+        Returns series metadata plus active market references needed to fetch market details and place orders.
+        `,
         {
             category: z.string().optional().describe("Filter by category (e.g. 'Climate and Weather' ,'Companies', 'Politics', 'Sports')"),
-            tags: z.string().optional().describe("Comma-separated tags to filter by (e.g. 'Soccer,Basketball,AI,Space,Politicians')"),
-            status: z.string().optional().describe("Filter by status (e.g. 'open', 'closed', 'unopened')"),
-            orderBy: z.string().optional().describe("Optional sorting: 'trending', 'newest', 'volatile', 'volume', '50-50'"),
+            tags: z.string().optional().describe("Filter by tags. e.g: Basketball,Football"),
+            status: z.enum(["open", "closed", "unopened", "settled"]).optional().describe("Defaults to 'open' to show live markets."),
+            orderBy: z.enum(["trending", "newest", "volatile", "volume", "50-50"])
+                .optional()
+                .describe("Sorting preference. Defaults to 'trending'."),
+            page_size: z.number().optional().describe("Maximum number of series to return. Defaults to 20."),
         },
-        async ({ category, tags, status, orderBy }) => {
-            log.info("Tool called: search_series", { category, tags, status, orderBy });
+        async ({ category, tags, status, orderBy, page_size }) => {
+            log.info("Tool called: search_series", { category, tags, status, orderBy, page_size });
 
             try {
-                const result = await searchApi.getSearchSeries({ category, tags, status, orderBy });
+                const result = await searchApi.getSearchSeries({ category, tags, status, orderBy, page_size });
 
                 log.info("Tool search_series completed", {
                     resultCount: result.total_results_count,

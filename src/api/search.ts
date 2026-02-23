@@ -69,7 +69,8 @@ export class SearchApi {
         category?: string,
         tags?: string,
         status?: string,
-        orderBy?: string | "trending" | "newest" | "volatile" | "volume" | "50-50"
+        orderBy?: string | "trending" | "newest" | "volatile" | "volume" | "50-50",
+        page_size?: number,
     }): Promise<GetSearchSeriesResponse> {
         log.info("Fetching search series", { filters: params });
         const done = log.time(`GET /search/series`);
