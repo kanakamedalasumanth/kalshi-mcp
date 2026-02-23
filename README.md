@@ -5,6 +5,7 @@ Hey! This is a simple Model Context Protocol (MCP) server that connects your AI 
 No complicated setups, just plain simple bridging between your AI and Kalshi.
 
 > **⚠️ Note: This project is currently under active development. Some features or endpoints might occasionally not work as expected while we continue to build and improve.**
+> ** Sports integration:** For live sports games, we are integrating with [balldontlie.io](https://www.balldontlie.io) for live score tracking!
 
 ---
 
