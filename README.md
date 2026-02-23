@@ -1,6 +1,6 @@
 # Kalshi MCP Server
 
-Hey! This is a simple Model Context Protocol (MCP) server that connects your AI agents (like OpenClaw or Claude) directly to the Kalshi prediction market. It lets your AI pull live events, analyze market sentiment, and even place trades. 
+Hey! This is a simple Model Context Protocol (MCP) server that connects your AI agents (like OpenClaw/NonoClaw or Claude or nay mcp supported) directly to the Kalshi prediction market. It lets your AI pull live events, analyze market sentiment, and even place trades. 
 
 No complicated setups, just plain simple bridging between your AI and Kalshi.
 
