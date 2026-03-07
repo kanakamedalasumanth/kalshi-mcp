@@ -471,3 +471,49 @@ export interface LiveDataEntry {
 export interface GetLiveDataResponse {
     live_datas?: LiveDataEntry[];
 }
+
+/**
+ * Milestone — a scheduled event (game, race, etc.) linked to Kalshi events.
+ * Used to fetch live scores and game state.
+ */
+export interface MilestoneData {
+    id: string;
+    category: string;
+    type: string;
+    start_date: string;
+    end_date?: string;
+    related_event_tickers: string[];
+    title: string;
+    notification_message: string;
+    source_id?: string;
+    source_ids?: Record<string, string>;
+    details: Record<string, unknown>;
+    primary_event_tickers: string[];
+    last_updated_ts: string;
+}
+
+export interface GetMilestoneResponse {
+    milestone: MilestoneData;
+}
+
+export interface GetMilestonesResponse {
+    milestones: MilestoneData[];
+    cursor?: string;
+}
+
+/**
+ * StructuredTarget — a named entity (team, player, candidate) referenced by ID in live data.
+ */
+export interface StructuredTarget {
+    id: string;
+    name: string;
+    type: string;
+    details?: Record<string, unknown>;
+    source_id?: string;
+    source_ids?: Record<string, string>;
+    last_updated_ts?: string;
+}
+
+export interface GetStructuredTargetResponse {
+    structured_target: StructuredTarget;
+}

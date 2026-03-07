@@ -4,6 +4,7 @@
 // Tools registered here:
 //   get_categories  — Get all categories and their tags on Kalshi
 //   search_markets  — Search for open markets with live data enrichment
+//   get_live_score  — Get live scores/game state for specific events
 
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -122,6 +123,7 @@ function buildOutputItem(
 ): Record<string, unknown> {
     const output: Record<string, unknown> = {
         event_ticker: item.event_ticker,
+        milestone_id: item.milestone_id,
         event_title: item.event_title,
         category: item.category,
         tags: item.tags ?? [],
@@ -155,12 +157,12 @@ function buildOutputItem(
     }
 
     // Structured targets(teams / candidates)
-    // if (hydratedData?.structured_targets) {
-    //     const teams = extractTeams(Object.values(hydratedData.structured_targets) as Record<string, unknown>[]);
-    //     if (teams) {
-    //         output.teams = teams;
-    //     }
-    // }
+    if (hydratedData?.structured_targets) {
+        const teams = extractTeams(Object.values(hydratedData.structured_targets) as Record<string, unknown>[]);
+        if (teams) {
+            output.teams = teams;
+        }
+    }
 
     // Live state from the batch endpoint
     let liveState: Record<string, unknown> | undefined;
@@ -294,5 +296,171 @@ export function registerDiscoveryTools(
         }
     );
 
-    log.info("Discovery tools registered (2 tools)");
+    // ── get_live_score ─────────────────────────────────────────
+    server.tool(
+        "get_live_score",
+        "Get live scores, game state, or race results for specific Kalshi events. " +
+        "Provide milestone_ids (from a previous search_markets call) or an event_ticker to look up. " +
+        "Returns real-time game scores for sports, election results for politics, etc.",
+        {
+            milestone_ids: z.array(z.string()).optional().describe(
+                "Milestone IDs from a previous search_markets result (preferred — fastest)"
+            ),
+            event_ticker: z.string().optional().describe(
+                "Event ticker to look up (e.g. 'NBA-LAL-BOS-2026MAR07'). Will search for the milestone automatically."
+            ),
+        },
+        async (params) => {
+            log.info("Tool called: get_live_score", {
+                milestone_ids: params.milestone_ids,
+                event_ticker: params.event_ticker,
+            });
+
+            try {
+                // Validate at least one param is provided
+                if (!params.milestone_ids?.length && !params.event_ticker) {
+                    return {
+                        content: [{
+                            type: "text" as const,
+                            text: "Error: Provide either milestone_ids or event_ticker",
+                        }],
+                        isError: true,
+                    };
+                }
+
+                let milestoneIds: string[] = params.milestone_ids ?? [];
+                let eventInfo: Record<string, unknown> | undefined;
+
+                // If event_ticker provided, resolve the milestone_id via milestones API
+                if (params.event_ticker && milestoneIds.length === 0) {
+                    const milestoneResult = await searchApi.getMilestonesByEventTicker(params.event_ticker);
+                    const milestones = milestoneResult.milestones ?? [];
+
+                    if (milestones.length === 0) {
+                        return {
+                            content: [{
+                                type: "text" as const,
+                                text: `No milestones found for event ticker: ${params.event_ticker}`,
+                            }],
+                            isError: true,
+                        };
+                    }
+
+                    milestoneIds = milestones.map((m) => m.id);
+                    eventInfo = {
+                        event_ticker: params.event_ticker,
+                        milestones: milestones.map((m) => ({
+                            id: m.id,
+                            title: m.title,
+                            type: m.type,
+                            category: m.category,
+                            start_date: m.start_date,
+                            end_date: m.end_date,
+                        })),
+                    };
+                }
+
+                if (milestoneIds.length === 0) {
+                    return {
+                        content: [{
+                            type: "text" as const,
+                            text: "No milestone_id found for this event. The event may not have live score tracking.",
+                        }],
+                        isError: true,
+                    };
+                }
+
+                // Fetch live data for the resolved milestone IDs
+                const liveRaw = await searchApi.getLiveData(milestoneIds);
+
+                // 1. Collect all potential structured target UUIDs from live data
+                const targetIds = new Set<string>();
+                for (const entry of liveRaw.live_datas ?? []) {
+                    // Political races: candidates keyed by UUID
+                    if (entry.details?.candidates && typeof entry.details.candidates === "object") {
+                        for (const key of Object.keys(entry.details.candidates as Record<string, unknown>)) {
+                            targetIds.add(key);
+                        }
+                    }
+                    // Sports: home/away team structured target IDs
+                    if (entry.details?.home_team_id && typeof entry.details.home_team_id === "string") {
+                        targetIds.add(entry.details.home_team_id as string);
+                    }
+                    if (entry.details?.away_team_id && typeof entry.details.away_team_id === "string") {
+                        targetIds.add(entry.details.away_team_id as string);
+                    }
+                }
+
+                // 2. Resolve UUIDs to names via structured targets API
+                const nameMap: Record<string, string> = {};
+                if (targetIds.size > 0) {
+                    const results = await Promise.allSettled(
+                        [...targetIds].map((id) => searchApi.getStructuredTarget(id))
+                    );
+                    for (const result of results) {
+                        if (result.status === "fulfilled" && result.value.structured_target) {
+                            const t = result.value.structured_target;
+                            nameMap[t.id] = t.name;
+                        }
+                    }
+                }
+
+                // 3. Build results with resolved names
+                const liveResults: Record<string, unknown>[] = [];
+                for (const entry of liveRaw.live_datas ?? []) {
+                    const liveEntry: Record<string, unknown> = {
+                        milestone_id: entry.milestone_id,
+                        type: entry.type,
+                        ...entry.details,
+                    };
+
+                    // Strip noisy display-only keys
+                    const cleaned = stripKeys(liveEntry, SKIP_GENERIC_KEYS) as Record<string, unknown>;
+
+                    // Resolve candidate UUIDs to names for political races
+                    if (cleaned.candidates && typeof cleaned.candidates === "object") {
+                        const rawCandidates = cleaned.candidates as Record<string, unknown>;
+                        cleaned.candidates = Object.fromEntries(
+                            Object.entries(rawCandidates)
+                                .map(([uuid, data]) => [nameMap[uuid] ?? uuid, data] as const)
+                        );
+                    }
+
+                    // Resolve team IDs to names for sports
+                    if (cleaned.home_team_id && nameMap[cleaned.home_team_id as string]) {
+                        cleaned.home_team = nameMap[cleaned.home_team_id as string];
+                    }
+                    if (cleaned.away_team_id && nameMap[cleaned.away_team_id as string]) {
+                        cleaned.away_team = nameMap[cleaned.away_team_id as string];
+                    }
+
+                    liveResults.push(cleaned);
+                }
+
+                const output: Record<string, unknown> = {
+                    live_scores: liveResults,
+                };
+                if (eventInfo) {
+                    output.event = eventInfo;
+                }
+
+                log.info("Tool get_live_score completed", {
+                    milestoneCount: milestoneIds.length,
+                    liveResultCount: liveResults.length,
+                });
+
+                return {
+                    content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+                };
+            } catch (error) {
+                log.error("Tool get_live_score failed", { error: String(error) });
+                return {
+                    content: [{ type: "text" as const, text: `Error: ${String(error)}` }],
+                    isError: true,
+                };
+            }
+        }
+    );
+
+    log.info("Discovery tools registered (3 tools)");
 }

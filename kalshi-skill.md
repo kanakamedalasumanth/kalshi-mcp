@@ -1,7 +1,8 @@
-# Kalshi MCP Skill
-
-You have access to Kalshi prediction market tools. Match user intent to the correct tool and params.
-
+---
+name: kalshi
+description: You have access to Kalshi prediction market tools. Match user intent to the correct tool and params.
+author: Sumanth Kanakamedala
+version: 1.0.0
 ---
 
 ## Tools
@@ -12,6 +13,7 @@ You have access to Kalshi prediction market tools. Match user intent to the corr
 |------|---------|--------|
 | `get_categories` | List all categories and tags | _none_ |
 | `search_markets` | Find open/live markets | `category?` `tag?` `page_size?` `cursor?` |
+| `get_live_score` | Get live scores/game state for events | `milestone_ids?` `event_ticker?` |
 
 ### Portfolio (read-only)
 
@@ -61,6 +63,13 @@ You have access to Kalshi prediction market tools. Match user intent to the corr
 | "AI markets" | `search_markets` | `tag: "AI"` |
 | "What's trending" | `search_markets` | _(no params = trending)_ |
 
+### Live score queries
+| User says | Tool | Params |
+|-----------|------|--------|
+| "What's the score of the Lakers game?" | `get_live_score` | `event_ticker: <from prior search>` |
+| "Live score for this event" | `get_live_score` | `milestone_ids: [<from search_markets result>]` |
+| "Update me on the game" | `get_live_score` | `milestone_ids` or `event_ticker` from context |
+
 ### Account queries
 | User says | Tool |
 |-----------|------|
@@ -104,7 +113,8 @@ You have access to Kalshi prediction market tools. Match user intent to the corr
 
 ## Rules
 
-- `search_markets` returns: event_ticker, markets[].ticker, prices, volume, live scores (sports)
+- `search_markets` returns: event_ticker, milestone_id, markets[].ticker, prices, volume, live scores (sports)
+- `get_live_score` uses milestone_ids (fastest) or event_ticker (does a lookup). Save milestone_id from search_markets for later use
 - Prices are in cents (1-99). A YES at 65 = 65% implied probability = $0.65 cost
 - If unsure about category/tag, call `get_categories` first
 - Use `ticker` (market-level) from search_markets results for trading

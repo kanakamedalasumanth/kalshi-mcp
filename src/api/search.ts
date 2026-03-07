@@ -4,6 +4,9 @@
 // Wraps:
 //   GET /search/tags_by_categories → tags grouped by category
 //   GET /search/series             → search series with hydration
+//   GET /milestones                → milestones by event ticker
+//   GET /milestones/{id}           → single milestone by ID
+//   GET /structured_targets/{id}   → resolve UUID to named entity
 //   GET (external) /v1/live_data/batch → live game/race data
 
 import { createLogger } from "../logger.js";
@@ -12,6 +15,9 @@ import type {
     GetTagsByCategoriesResponse,
     GetSearchSeriesResponse,
     GetLiveDataResponse,
+    GetMilestoneResponse,
+    GetMilestonesResponse,
+    GetStructuredTargetResponse,
 } from "../types/kalshi.js";
 
 const log = createLogger("SearchAPI");
@@ -67,6 +73,54 @@ export class SearchApi {
         );
 
         done({ totalResults: result.total_results_count, pageSize: result.current_page?.length });
+        return result;
+    }
+
+    /**
+     * Fetches milestones linked to an event ticker.
+     * Uses the authenticated milestones API — direct and efficient.
+     */
+    async getMilestonesByEventTicker(eventTicker: string): Promise<GetMilestonesResponse> {
+        const done = log.time("GET /milestones (by event_ticker)");
+
+        const result = await this.client.get<GetMilestonesResponse>(
+            "/milestones",
+            {
+                related_event_ticker: eventTicker,
+                limit: 10,
+            }
+        );
+
+        done({ eventTicker, milestoneCount: result.milestones?.length ?? 0 });
+        return result;
+    }
+
+    /**
+     * Fetches a single milestone by its ID.
+     */
+    async getMilestone(milestoneId: string): Promise<GetMilestoneResponse> {
+        const done = log.time("GET /milestones/{id}");
+
+        const result = await this.client.get<GetMilestoneResponse>(
+            `/milestones/${milestoneId}`
+        );
+
+        done({ milestoneId });
+        return result;
+    }
+
+    /**
+     * Fetches a structured target (team, player, candidate) by ID.
+     * Used to resolve UUIDs in live data to human-readable names.
+     */
+    async getStructuredTarget(targetId: string): Promise<GetStructuredTargetResponse> {
+        const done = log.time("GET /structured_targets/{id}");
+
+        const result = await this.client.get<GetStructuredTargetResponse>(
+            `/structured_targets/${targetId}`
+        );
+
+        done({ targetId });
         return result;
     }
 
