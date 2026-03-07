@@ -19,6 +19,9 @@ import { createLogger } from "../logger.js";
 
 const log = createLogger("KalshiClient");
 
+/** Accepted value types for query parameters — includes string[] for repeated keys. */
+export type ParamValue = string | number | boolean | string[] | undefined;
+
 /**
  * Standard error shape returned by Kalshi on 4xx/5xx responses.
  */
@@ -62,7 +65,7 @@ export class KalshiClient {
      * @param path   API path after the base URL (e.g. "/events")
      * @param params Optional query parameters as key-value pairs
      */
-    async get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
+    async get<T>(path: string, params?: Record<string, ParamValue>): Promise<T> {
         const url = this.buildUrl(path, params);
         return this.request<T>("GET", url, path);
     }
@@ -72,7 +75,7 @@ export class KalshiClient {
     * @param path   API path after the base URL (e.g. "/events")
     * @param params Optional query parameters as key-value pairs
     */
-    async getPublic<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
+    async getPublic<T>(path: string, params?: Record<string, ParamValue>): Promise<T> {
         const url = this.buildUrl(path, params, true);
         return this.request<T>("GET", url, path, undefined, true);
     }
@@ -213,14 +216,19 @@ export class KalshiClient {
      */
     private buildUrl(
         path: string,
-        params?: Record<string, string | number | boolean | undefined>,
+        params?: Record<string, ParamValue>,
         isPublic: boolean = false
     ): string {
         const url = new URL(`${isPublic ? this.publicBaseUrl : this.baseUrl}${path}`);
 
         if (params) {
             for (const [key, value] of Object.entries(params)) {
-                if (value !== undefined) {
+                if (value === undefined) continue;
+                if (Array.isArray(value)) {
+                    for (const v of value) {
+                        url.searchParams.append(key, v);
+                    }
+                } else {
                     url.searchParams.set(key, String(value));
                 }
             }

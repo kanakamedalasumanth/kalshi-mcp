@@ -1,74 +1,43 @@
 // ============================================
-// src/tools/portfolio-tools.ts — MCP Tools for Portfolio Management
+// src/tools/portfolio-tools.ts — Portfolio MCP Tools
 // ============================================
-// These tools let AI agents query the user's portfolio state:
-// balance, positions, and trade history. All read-only.
-//
-// Agents use these to:
-// - Check available funds before placing orders
-// - Review current positions for portfolio-aware decisions
-// - Audit past trade fills for performance analysis
-// ============================================
+// Tools registered here:
+//   get_balance      — Get account balance and portfolio value
+//   get_positions    — Get current open positions
+//   get_fills        — Get trade fill history
+//   get_settlements  — Get settlement history
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { PortfolioApi } from "../api/portfolio.js";
 import { createLogger } from "../logger.js";
 
 const log = createLogger("PortfolioTools");
 
-/**
- * Registers all portfolio management tools on the MCP server.
- *
- * @param server       The McpServer instance
- * @param portfolioApi Initialized PortfolioApi instance
- */
+// ── Tool registration ────────────────────────────────────────────
+
 export function registerPortfolioTools(
     server: McpServer,
     portfolioApi: PortfolioApi
 ): void {
     log.info("Registering portfolio tools");
 
-    // ─────────────────────────────────────────────────────────────
-    // TOOL: get_balance
-    // ─────────────────────────────────────────────────────────────
-    // Shows available cash and total portfolio value.
-    // Agents should check this before placing orders to ensure
-    // sufficient funds.
-    // ─────────────────────────────────────────────────────────────
+    // ── get_balance ─────────────────────────────────────────────
     server.tool(
         "get_balance",
-        "Get your Kalshi account balance and portfolio value. " +
-        "Check this before placing orders to ensure you have enough funds. " +
-        "Values are shown in both cents and dollars.",
+        "Get your Kalshi account balance and portfolio value in dollars.",
         {},
         async () => {
             log.info("Tool called: get_balance");
-
             try {
                 const result = await portfolioApi.getBalance();
-
-                log.info("Tool get_balance completed", {
-                    balanceCents: result.balance,
-                    portfolioValueCents: result.portfolio_value,
-                });
-
+                const output = {
+                    balance_dollars: (result.balance / 100).toFixed(2),
+                    portfolio_value_dollars: (result.portfolio_value / 100).toFixed(2),
+                };
+                log.info("Tool get_balance completed", output);
                 return {
-                    content: [
-                        {
-                            type: "text" as const,
-                            text: JSON.stringify(
-                                {
-                                    balance_cents: result.balance,
-                                    balance_dollars: (result.balance / 100).toFixed(2),
-                                    portfolio_value_cents: result.portfolio_value,
-                                    portfolio_value_dollars: (result.portfolio_value / 100).toFixed(2),
-                                },
-                                null,
-                                2
-                            ),
-                        },
-                    ],
+                    content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
                 };
             } catch (error) {
                 log.error("Tool get_balance failed", { error: String(error) });
@@ -80,75 +49,38 @@ export function registerPortfolioTools(
         }
     );
 
-    // ─────────────────────────────────────────────────────────────
-    // TOOL: get_positions
-    // ─────────────────────────────────────────────────────────────
-    // Shows all current market positions. Critical for portfolio-
-    // aware agents that need to know what they already hold before
-    // making new trading decisions.
-    // ─────────────────────────────────────────────────────────────
+    // ── get_positions ───────────────────────────────────────────
     server.tool(
         "get_positions",
-        "Get your current Kalshi market positions. Shows how many contracts " +
-        "you hold in each market, your realized P&L, and whether markets " +
-        "have settled. Positive position = YES contracts, negative = NO.",
+        "Get your current open positions on Kalshi markets.",
         {
-            ticker: z
-                .string()
-                .optional()
-                .describe("Filter to positions in a specific market."),
-            event_ticker: z
-                .string()
-                .optional()
-                .describe("Filter to positions in markets under a specific event."),
-            limit: z
-                .number()
-                .min(1)
-                .max(1000)
-                .optional()
-                .describe("Max positions to return (default 100)."),
+            ticker: z.string().optional().describe("Filter by market ticker"),
+            event_ticker: z.string().optional().describe("Filter by event ticker"),
+            limit: z.number().optional().describe("Maximum number of positions to return"),
+            cursor: z.string().optional().describe("Pagination cursor from a previous response"),
         },
-        async ({ ticker, event_ticker, limit }) => {
-            log.info("Tool called: get_positions", { ticker, event_ticker, limit });
-
+        async (params) => {
+            log.info("Tool called: get_positions", {
+                ticker: params.ticker,
+                event_ticker: params.event_ticker,
+                limit: params.limit,
+            });
             try {
                 const result = await portfolioApi.getPositions({
-                    ticker,
-                    event_ticker,
-                    limit,
+                    ticker: params.ticker,
+                    event_ticker: params.event_ticker,
+                    limit: params.limit,
+                    cursor: params.cursor,
                 });
-
-                const positions = result.market_positions || [];
-
+                const output = {
+                    market_positions: result.market_positions,
+                    cursor: result.cursor,
+                };
                 log.info("Tool get_positions completed", {
-                    positionCount: positions.length,
+                    positionCount: result.market_positions?.length ?? 0,
                 });
-
                 return {
-                    content: [
-                        {
-                            type: "text" as const,
-                            text: JSON.stringify(
-                                {
-                                    position_count: positions.length,
-                                    has_more: !!result.cursor,
-                                    positions: positions.map((p) => ({
-                                        ticker: p.ticker,
-                                        event_ticker: p.event_ticker,
-                                        position: p.position,
-                                        position_side: p.position > 0 ? "YES" : p.position < 0 ? "NO" : "NONE",
-                                        total_traded: p.total_traded,
-                                        resting_orders: p.resting_orders_count,
-                                        fees_paid_cents: p.fees_paid,
-                                        realized_pnl_cents: p.realized_pnl,
-                                        market_result: p.market_result || "pending",
-                                    })),
-                                },
-                                null,
-                                2
-                            ),
-                        },
-                    ],
+                    content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
                 };
             } catch (error) {
                 log.error("Tool get_positions failed", { error: String(error) });
@@ -160,64 +92,35 @@ export function registerPortfolioTools(
         }
     );
 
-    // ─────────────────────────────────────────────────────────────
-    // TOOL: get_fills
-    // ─────────────────────────────────────────────────────────────
-    // Trade execution history — every matched trade.
-    // Useful for performance analysis and audit trails.
-    // ─────────────────────────────────────────────────────────────
+    // ── get_fills ───────────────────────────────────────────────
     server.tool(
         "get_fills",
-        "Get your completed trade fills. Each fill represents a matched " +
-        "trade showing the exact price, quantity, and whether you were " +
-        "the maker or taker. Useful for reviewing trade history and performance.",
+        "Get your trade fill history — completed order executions.",
         {
-            ticker: z
-                .string()
-                .optional()
-                .describe("Filter fills to a specific market."),
-            limit: z
-                .number()
-                .min(1)
-                .max(1000)
-                .optional()
-                .describe("Max fills to return (default 100)."),
+            ticker: z.string().optional().describe("Filter by market ticker"),
+            limit: z.number().optional().describe("Maximum number of fills to return"),
+            cursor: z.string().optional().describe("Pagination cursor from a previous response"),
         },
-        async ({ ticker, limit }) => {
-            log.info("Tool called: get_fills", { ticker, limit });
-
+        async (params) => {
+            log.info("Tool called: get_fills", {
+                ticker: params.ticker,
+                limit: params.limit,
+            });
             try {
-                const result = await portfolioApi.getFills({ ticker, limit });
-                const fills = result.fills || [];
-
-                log.info("Tool get_fills completed", { fillCount: fills.length });
-
+                const result = await portfolioApi.getFills({
+                    ticker: params.ticker,
+                    limit: params.limit,
+                    cursor: params.cursor,
+                });
+                const output = {
+                    fills: result.fills,
+                    cursor: result.cursor,
+                };
+                log.info("Tool get_fills completed", {
+                    fillCount: result.fills?.length ?? 0,
+                });
                 return {
-                    content: [
-                        {
-                            type: "text" as const,
-                            text: JSON.stringify(
-                                {
-                                    fill_count: fills.length,
-                                    has_more: !!result.cursor,
-                                    fills: fills.map((f) => ({
-                                        trade_id: f.trade_id,
-                                        order_id: f.order_id,
-                                        ticker: f.ticker,
-                                        side: f.side,
-                                        action: f.action,
-                                        count: f.count,
-                                        yes_price: f.yes_price,
-                                        no_price: f.no_price,
-                                        is_taker: f.is_taker,
-                                        time: f.created_time,
-                                    })),
-                                },
-                                null,
-                                2
-                            ),
-                        },
-                    ],
+                    content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
                 };
             } catch (error) {
                 log.error("Tool get_fills failed", { error: String(error) });
@@ -229,5 +132,45 @@ export function registerPortfolioTools(
         }
     );
 
-    log.info("All portfolio tools registered (3 tools)");
+    // ── get_settlements ─────────────────────────────────────────
+    server.tool(
+        "get_settlements",
+        "Get your settlement history — markets that have resolved and paid out.",
+        {
+            ticker: z.string().optional().describe("Filter by market ticker"),
+            limit: z.number().optional().describe("Maximum number of settlements to return"),
+            cursor: z.string().optional().describe("Pagination cursor from a previous response"),
+        },
+        async (params) => {
+            log.info("Tool called: get_settlements", {
+                ticker: params.ticker,
+                limit: params.limit,
+            });
+            try {
+                const result = await portfolioApi.getSettlements({
+                    ticker: params.ticker,
+                    limit: params.limit,
+                    cursor: params.cursor,
+                });
+                const output = {
+                    settlements: result.settlements,
+                    cursor: result.cursor,
+                };
+                log.info("Tool get_settlements completed", {
+                    settlementCount: result.settlements?.length ?? 0,
+                });
+                return {
+                    content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+                };
+            } catch (error) {
+                log.error("Tool get_settlements failed", { error: String(error) });
+                return {
+                    content: [{ type: "text" as const, text: `Error: ${String(error)}` }],
+                    isError: true,
+                };
+            }
+        }
+    );
+
+    log.info("Portfolio tools registered (4 tools)");
 }

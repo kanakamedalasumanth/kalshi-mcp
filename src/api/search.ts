@@ -1,31 +1,29 @@
 // ============================================
 // src/api/search.ts — Kalshi Search API Client
 // ============================================
-// The Search API provides discovery helpers that make it easier to find
-// content on Kalshi. Currently wraps:
-//   GET /search/tags_by_categories → Tags grouped by category
-//
-// Useful for understanding what categories and tags exist before
-// filtering series or events.
-// ============================================
+// Wraps:
+//   GET /search/tags_by_categories → tags grouped by category
+//   GET /search/series             → search series with hydration
+//   GET (external) /v1/live_data/batch → live game/race data
 
 import { createLogger } from "../logger.js";
 import { KalshiClient } from "../auth/client.js";
-import type { GetTagsByCategoriesResponse, GetSearchSeriesResponse } from "../types/kalshi.js";
+import type {
+    GetTagsByCategoriesResponse,
+    GetSearchSeriesResponse,
+    GetLiveDataResponse,
+} from "../types/kalshi.js";
 
 const log = createLogger("SearchAPI");
 
-/**
- * SearchApi — discovery and search helpers for Kalshi content.
- *
- * Usage:
- * ```ts
- * const api = new SearchApi(client);
- * const tags = await api.getTagsByCategories();
- * // Could be { "Crypto": ["BTC", "ETH"], "Sports": ["NFL", "NBA"], ... }
- * // or a different shape — we return the raw response for flexibility.
- * ```
- */
+/** Parameters accepted by getSearchSeries (user-configurable subset). */
+export interface SearchSeriesParams {
+    category?: string;
+    tag?: string;
+    page_size?: number;
+    cursor?: string;
+}
+
 export class SearchApi {
     private client: KalshiClient;
 
@@ -34,61 +32,69 @@ export class SearchApi {
         log.info("Search API module initialized");
     }
 
-    /**
-     * Gets available tags grouped by series category.
-     *
-     * Calls the Kalshi `/search/tags_by_categories` endpoint.
-     * Returns the raw API response for maximum flexibility.
-     */
     async getTagsByCategories(): Promise<GetTagsByCategoriesResponse> {
-        log.info("Fetching tags by categories");
         const done = log.time("GET /search/tags_by_categories");
 
         const result = await this.client.get<GetTagsByCategoriesResponse>(
             "/search/tags_by_categories"
         );
 
-        const topKeys = Object.keys(result);
-        done({ topKeys });
-        log.info("Tags by categories fetched", {
-            topLevelKeys: topKeys,
-            sampleValues: Object.entries(result).slice(0, 3).map(([k, v]) => ({
-                key: k,
-                type: typeof v,
-                isArray: Array.isArray(v),
-            })),
-        });
-
+        done({ categoryCount: Object.keys(result.categories ?? result).length });
         return result;
     }
 
     /**
-     * Searches for series and related active markets by category and tags.
+     * Searches for open series on Kalshi with trending ordering and milestone hydration.
+     * Fixed params (always sent): order_by=trending, status=open, with_milestones=true,
+     * hydrate=milestones,structured_targets, include_sports_derivatives=true.
      */
-    async getSearchSeries(params?: {
-        category?: string,
-        tags?: string,
-        status?: string,
-        orderBy?: string | "trending" | "newest" | "volatile" | "volume" | "50-50",
-        page_size?: number,
-    }): Promise<GetSearchSeriesResponse> {
-        log.info("Fetching search series", { filters: params });
-        const done = log.time(`GET /search/series`);
+    async getSearchSeries(params: SearchSeriesParams = {}): Promise<GetSearchSeriesResponse> {
+        const done = log.time("GET /search/series");
 
         const result = await this.client.getPublic<GetSearchSeriesResponse>(
             "/search/series",
-            params
+            {
+                order_by: "trending",
+                status: "open",
+                with_milestones: true,
+                hydrate: "milestones,structured_targets",
+                include_sports_derivatives: true,
+                page_size: params.page_size ?? 15,
+                category: params.category,
+                tag: params.tag,
+                cursor: params.cursor,
+            }
         );
 
-        done({
-            resultCount: result.total_results_count,
-            pageCount: result.current_page?.length ?? 0
-        });
-
-        log.info("Search series fetched", {
-            resultCount: result.total_results_count,
-        });
-
+        done({ totalResults: result.total_results_count, pageSize: result.current_page?.length });
         return result;
+    }
+
+    /**
+     * Fetches live data (scores, race results, etc.) for a set of milestone IDs.
+     * Uses the public elections API via client.getPublic() — no auth required.
+     * Returns an empty response on failure so callers can gracefully degrade.
+     */
+    async getLiveData(milestoneIds: string[]): Promise<GetLiveDataResponse> {
+        if (milestoneIds.length === 0) {
+            return { live_datas: [] };
+        }
+
+        const done = log.time("GET /v1/live_data/batch");
+
+        try {
+            const data = await this.client.getPublic<GetLiveDataResponse>(
+                "/live_data/batch",
+                { milestone_ids: milestoneIds }
+            );
+
+            done({ entryCount: data.live_datas?.length ?? 0 });
+            return data;
+        } catch (error) {
+            log.warn("Live data fetch error — returning empty", {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return { live_datas: [] };
+        }
     }
 }

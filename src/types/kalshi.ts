@@ -28,8 +28,8 @@ export interface Market {
     market_type: "binary" | "scalar";  // Type of market
     title: string;                     // Full market title
     subtitle: string;                  // Shortened title
-    yes_sub_title: string;             // Short YES side description
-    no_sub_title: string;              // Short NO side description
+    yes_subtitle: string;             // Short YES side description
+    no_subtitle: string;              // Short NO side description
 
     // ── Timestamps ─────────────────────────────────────
     created_time: string;              // When the market was created
@@ -92,6 +92,7 @@ export interface Market {
     strike_type?: string;
     floor_strike?: number;
     cap_strike?: number;
+    structured_target_id?: string;
 }
 
 /**
@@ -351,8 +352,20 @@ export interface GetFillsResponse {
     cursor: string;
 }
 
+/**
+ * Settlement — a resolved market position with payout details.
+ */
+export interface Settlement {
+    ticker: string;
+    settled_time: string;
+    result: string;
+    revenue: number;           // cents
+    no_count: number;
+    yes_count: number;
+}
+
 export interface GetSettlementsResponse {
-    settlements: unknown[];
+    settlements: Settlement[];
     cursor: string;
 }
 
@@ -400,6 +413,7 @@ export interface SearchSeriesItem {
     event_subtitle: string;
     event_title: string;
     category: string;
+    tags: string[];
     total_series_volume: number;
     total_volume: number;
     total_market_count: number;
@@ -410,9 +424,50 @@ export interface SearchSeriesItem {
     is_closing: boolean;
     is_price_delta: boolean;
     search_score: number;
+    milestone_id?: string;
+}
+
+export interface HydratedMilestone {
+    id?: string;
+    type?: string;
+    title?: string;
+    product_details?: Record<string, unknown>;
+    details?: Record<string, unknown>;
+}
+
+export interface HydratedTarget {
+    id?: string;
+    name?: string;
+    type?: string;
+    details?: Record<string, unknown>;
+    product_details?: Record<string, unknown>;
+}
+
+export interface HydratedData {
+    milestones?: Record<string, HydratedMilestone>;
+    structured_targets?: Record<string, HydratedTarget>;
 }
 
 export interface GetSearchSeriesResponse {
     total_results_count: number;
     current_page: SearchSeriesItem[];
+    cursor?: string;
+    hydrated_data?: HydratedData;
+}
+
+/**
+ * LiveDataEntry — a single item in the live_data/batch response array.
+ */
+export interface LiveDataEntry {
+    type: string;
+    details: Record<string, unknown>;
+    milestone_id: string;
+}
+
+/**
+ * GetLiveDataResponse — response from the live_data/batch endpoint.
+ * The API returns an array of entries under the `live_datas` key.
+ */
+export interface GetLiveDataResponse {
+    live_datas?: LiveDataEntry[];
 }
